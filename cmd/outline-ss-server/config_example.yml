@@ -52,3 +52,4 @@ services:
       - id: user-2
         cipher: chacha20-ietf-poly1305
         secret: Secret2
+

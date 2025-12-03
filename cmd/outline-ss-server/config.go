@@ -93,7 +93,7 @@ func (c *ListenerConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 	lnTypeStr, ok := rawType.(string)
 	if !ok {
-		return fmt.Errorf("`type` is not a string, but %T", rawType)	
+		return fmt.Errorf("`type` is not a string, but %T", rawType)
 	}
 	lnType := ListenerType(lnTypeStr)
 	delete(raw, "type")
