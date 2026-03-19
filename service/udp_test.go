@@ -1,4 +1,4 @@
-// Copyright 2018 Jigsaw Operations LLC
+// Copyright 2018 The Outline Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,14 +24,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-sdk/transport"
-	"github.com/Jigsaw-Code/outline-sdk/transport/shadowsocks"
 	logging "github.com/op/go-logging"
 	"github.com/shadowsocks/go-shadowsocks2/socks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.getoutline.org/sdk/transport"
+	"golang.getoutline.org/sdk/transport/shadowsocks"
 
-	onet "github.com/Jigsaw-Code/outline-ss-server/net"
+	onet "golang.getoutline.org/tunnel-server/net"
 )
 
 const timeout = 5 * time.Minute
@@ -637,4 +637,54 @@ func TestClosedUDPListenerError(t *testing.T) {
 
 	_, err = packetConn.WriteTo(nil, &net.UDPAddr{})
 	require.ErrorIs(t, err, net.ErrClosed)
+}
+
+func TestAssociationCloseRaceWithPacketServe(t *testing.T) {
+	// Regression test: when the handler calls Close() (which closes readCh
+	// in the old code) while PacketServe's main loop is simultaneously
+	// enqueuing a packet into readCh, the old code panicked with
+	// "send on closed channel".
+	//
+	// The fix changes Close() to close doneCh instead (via sync.Once),
+	// leaving readCh open so the send cannot panic.
+	//
+	// https://github.com/OutlineFoundation/tunnel-server/pull/289
+
+	ciphers, _ := MakeTestCiphers([]string{"asdf"})
+	cipher := ciphers.SnapshotForClientIP(netip.Addr{})[0].Value.(*CipherEntry).CryptoKey
+
+	handler := NewAssociationHandler(ciphers, nil)
+	clientConn := makePacketConn()
+	targetConn := makePacketConn()
+	handler.SetTargetPacketListener(&packetListener{targetConn})
+
+	// Use a handler that reads one packet, then explicitly closes the
+	// connection while more packets are in flight. In the old code Close()
+	// called close(readCh), so a concurrent send from PacketServe's main
+	// loop would panic with "send on closed channel".
+	handlerDone := make(chan struct{})
+	var closeOnce sync.Once
+	go PacketServe(clientConn, func(ctx context.Context, conn net.Conn) {
+		buf := make([]byte, 1024)
+		conn.Read(buf) // Read one packet.
+		conn.Close()   // Close while PacketServe may still enqueue packets.
+		closeOnce.Do(func() { close(handlerDone) })
+	}, &natTestMetrics{})
+
+	// Send the first packet to create the association and let the handler read it.
+	sendSSPayload(clientConn, &targetAddr, cipher, []byte{1})
+	<-handlerDone
+
+	// Now blast more packets from the same client address. PacketServe will
+	// try to enqueue these into the association's readCh while/after Close()
+	// has been called. Before the fix, this would panic.
+	for i := 0; i < 50; i++ {
+		sendSSPayload(clientConn, &targetAddr, cipher, []byte{byte(i)})
+	}
+
+	// Give PacketServe time to process the queued packets.
+	time.Sleep(50 * time.Millisecond)
+
+	// Clean shutdown. If we get here without a panic, the race is fixed.
+	close(clientConn.recv)
 }

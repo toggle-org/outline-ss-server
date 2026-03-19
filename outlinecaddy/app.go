@@ -23,8 +23,8 @@ import (
 	"log/slog"
 	"strings"
 
-	outline_prometheus "github.com/Jigsaw-Code/outline-ss-server/prometheus"
-	outline "github.com/Jigsaw-Code/outline-ss-server/service"
+	outline_prometheus "golang.getoutline.org/tunnel-server/prometheus"
+	outline "golang.getoutline.org/tunnel-server/service"
 	"github.com/caddyserver/caddy/v2"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -82,7 +82,7 @@ func (app *OutlineApp) Provision(ctx caddy.Context) error {
 		}
 	}
 
-	if err := app.defineMetrics(); err != nil {
+	if err := app.defineMetrics(ctx.GetMetricsRegistry()); err != nil {
 		app.logger.Error("failed to define Prometheus metrics", "err", err)
 	}
 	// TODO: Set version at build time.
@@ -100,8 +100,8 @@ func (app *OutlineApp) Provision(ctx caddy.Context) error {
 	return nil
 }
 
-func (app *OutlineApp) defineMetrics() error {
-	r := prometheus.WrapRegistererWithPrefix("outline_", prometheus.DefaultRegisterer)
+func (app *OutlineApp) defineMetrics(metricsRegistry prometheus.Registerer) error {
+	r := prometheus.WrapRegistererWithPrefix("outline_", metricsRegistry)
 
 	var err error
 	buildInfo := prometheus.NewGaugeVec(prometheus.GaugeOpts{

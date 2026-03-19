@@ -1,4 +1,4 @@
-// Copyright 2018 Jigsaw Operations LLC
+// Copyright 2018 The Outline Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,13 +29,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-sdk/transport"
-	"github.com/Jigsaw-Code/outline-sdk/transport/shadowsocks"
-	"github.com/Jigsaw-Code/outline-sdk/x/websocket"
 	"github.com/gorilla/handlers"
 	"github.com/lmittmann/tint"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.getoutline.org/sdk/transport"
+	"golang.getoutline.org/sdk/transport/shadowsocks"
+	"golang.getoutline.org/sdk/x/websocket"
 	"golang.org/x/term"
 
 	"github.com/Jigsaw-Code/outline-ss-server/ipinfo"
